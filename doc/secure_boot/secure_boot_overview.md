@@ -35,7 +35,7 @@ Measured boot is orthogonal to secured boot, in that one can be enabled without 
 
 ## amd64
 
-Most modern hardware running on arm64 use UEFI, and most UEFI implementations likely support secure boot. The low-level protocol details appear to be [here](https://uefi.org/specs/UEFI/2.11/32_Secure_Boot_and_Driver_Signing.html).
+Most modern hardware running on amd4 use UEFI, and most UEFI implementations likely support secure boot. The low-level protocol details appear to be [here](https://uefi.org/specs/UEFI/2.11/32_Secure_Boot_and_Driver_Signing.html).
 
 ## arm64
 
@@ -110,12 +110,12 @@ This is done by the `shim` maintaining a MOK (stored as an EFI NVRAM variable, a
 
 For SONiC and for other enterprise network switches, the consumer hardware workflow doesn't make too much sense here, since a generic Windows OS isn't installed, nor is a stock Linux distro installed; it is instead some custom image, usually with a custom kernel. For that purpose, it makes more sense to have a separate workflow here, one that provides a tighter level of control.
 
-It is expected that companies deploying network switches will want to use their own certificates for signing their build of the kernel, as well as only allow their build of the OS to be loaded on the device. Additionally, the signing certificate may need to be rotated for various reasons. This means that the company will want to control what certificates are present, and when they are added and removed. For this purpose, there are two approaches.
+In specific use cases, where consumers are deploying their own SONiC on OCP/SONiC-compliant networking hardware produced by OEMs/ODMs, an agreed-upon workflow to manage certificates produced by both consumers and OEMs/ODMs would be required. This is because secure boot enabled hardware runs artifacts (frimware, software, OS image etc..) owned by both entities throughout the lifetime of the product. One such workflows is discussed below.
 
-## Approach 1: Hardware vendor ships device with requested secure boot certificates
+## Approach: Staging certificate handoff
 
-If feasible, the customer can provide the hardware vendor with the PK, KEK, and db certificates that they wish to have present on the device. Then, the hardware vendor could ship the device with these certificates pre-loaded and (optionally) with secure boot enabled out-of-the-box. If a cert rotation happens between the time that the device is shipped and the time that the device is used in production, the customer can then do the key rotation, with that request being signed with the KEK.
+The consumer provides the OEM/ODM with a set of staging certificates — temporary credentials used solely to bootstrap the key rotation process at the consumer's facility. The OEM/ODM enrolls these staging certificates into the appropriate UEFI key databases (PK, KEK, and/or `db`) and ships the hardware with secure boot enabled.
 
-## Approach 2: Hardware vendor ships device with no secure boot certificates
+Upon receiving the hardware, the consumer uses their staging private key to sign and apply updated ESLs that replace the staging certificates with their production certificates across the relevant databases. Once the production certificates are enrolled and validated, the consumer revokes the staging certificates by adding their hashes to `dbx`, ensuring they can no longer be used to authorize changes.
 
-Alternatively, the hardware vendor could ship a device with no certificates loaded at all (and thus have secure boot in setup mode). This lets the customer load their own certificate without starting with a signed key rotation. This does mean an unsigned/unvalidated image could be loaded on the device prior to certificates being loaded and secure boot being enabled; depending on the threat model/level, this may or may not be an issue.
+Note that between the time the hardware is shipped and the time the staging certificates are replaced, the device is only as secure as the staging credentials. Consumers should treat the staging private key with the same care as a production key, limit its validity period where possible, and ensure this rotation step is completed before the device is deployed into a production network
